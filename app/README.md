@@ -14,7 +14,7 @@ Sign in or create an account (the first account is the administrator) → **New 
 ## Mapping to Chapter 3
 | Report | Implementation |
 |---|---|
-| Fig 3.2 tiers | `public/` client tier · `server.js` application tier (JWT, RBAC, validation) · `public/he.js` cryptographic tier (shared by browser and server) · Firebase data tier (Firestore for records of users/datasets/grants/jobs/audit; Firebase Storage for public keys, relinearization keys and ciphertexts, which exceed Firestore's 1 MiB document limit) |
+| Fig 3.2 tiers | `public/` client tier · `server.js` application tier (JWT, RBAC, validation) · `public/he.js` cryptographic tier (shared by browser and server) · Firebase data tier (Firestore for records of users/datasets/grants/jobs/audit; public keys, relinearization keys and ciphertexts are split into chunk documents because they exceed Firestore's 1 MiB document limit; no Storage bucket is used, so the free Spark plan is enough) |
 | Fig 3.3 flowchart | register/login → encrypt with public key in browser → store ciphertext → authorised job → server computes → result decrypted client-side; denials are logged |
 | Fig 3.4 ERD | Firestore collections `user, dataset, encrypted_record, access_grant, computation_job, audit_log` (`store.js`) |
 | RBAC | roles admin / manager / analyst; per-dataset grants `compute < read < write` with optional expiry; owner-only grant management |
@@ -33,12 +33,12 @@ Each record is one ciphertext whose slots are a row of values (up to 8192 BFV / 
 * A grantee with `read` can download ciphertexts but cannot decrypt without the owner's key (verified in tests).
 
 ## Deploy: Render (server) + Firebase (database)
-1. **Firebase console** → create a project → *Build → Firestore Database* (create, production mode) → *Build → Storage* (get started; note the bucket name, e.g. `my-proj.firebasestorage.app`).
+1. **Firebase console** → create a project → *Build → Firestore Database* (create, production mode).
 2. *Project settings → Service accounts → Generate new private key* → keep the JSON file private (never commit it).
-3. Deploy the rules in `firestore.rules` / `storage.rules` (deny all client access; only the server's admin credentials can read or write): `firebase deploy --only firestore:rules,storage`.
+3. Deploy the rules in `firestore.rules` (deny all client access; only the server's admin credentials can read or write): `firebase deploy --only firestore:rules`.
 4. Push this `app/` folder to a GitHub repo (set Render's *Root Directory* to `app` if it lives in a subfolder).
-5. **Render** → *New → Blueprint* (uses `render.yaml`) or *New → Web Service*: build `npm ci`, start `npm start`, health check `/healthz`.
-6. In Render's *Environment* tab set `FIREBASE_SERVICE_ACCOUNT` (paste the whole JSON), `FIREBASE_STORAGE_BUCKET`, and `JWT_SECRET` (a long random string).
+5. **Vercel** → import the repo, set Root Directory to `app` (uses `vercel.json` and `api/index.js`).
+6. In Vercel's *Environment Variables* set `FIREBASE_SERVICE_ACCOUNT` (paste the whole JSON) and `JWT_SECRET` (a long random string).
 7. Open the Render URL (HTTPS is provided). The first account you register becomes the administrator.
 
 Note: Render's free tier sleeps after ~15 min idle, so the first request takes about 30–60 s to wake. Login lockout counters are per instance and reset on restart.

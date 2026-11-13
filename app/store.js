@@ -1,5 +1,5 @@
 // Data tier. Two interchangeable backends with the same async interface:
-//  - FirebaseStore: Firestore (metadata) + Firebase Storage (public/relin keys, ciphertexts: too big for 1 MiB docs)
+//  - FirebaseStore: Firestore only (metadata, plus big blobs split into <1 MiB chunk docs; no Storage bucket / paid plan needed)
 //  - MemoryStore: in-process, for tests and local dev without Firebase credentials
 const nowIso = () => new Date().toISOString();
 
@@ -35,11 +35,10 @@ export class MemoryStore extends Base {
 }
 
 export class FirebaseStore extends Base {
-  constructor({ fb, serviceAccount, bucket }) {
+  constructor({ fb, serviceAccount }) {
     super();
-    const app = fb.app.initializeApp({ credential: fb.app.cert(serviceAccount), storageBucket: bucket });
+    const app = fb.app.initializeApp({ credential: fb.app.cert(serviceAccount) });
     this.fs = fb.firestore.getFirestore(app); this.fs.settings({ ignoreUndefinedProperties: true });
-    this.bucket = fb.storage.getStorage(app).bucket();
   }
   async nextId(n) { // atomic counter -> integer ids (the UI and JWTs use numeric ids)
     const ref = this.fs.collection('counters').doc(n);
@@ -51,8 +50,23 @@ export class FirebaseStore extends Base {
   async find(n, field, val) { return (await this.fs.collection(n).where(field, '==', val).get()).docs.map(d => d.data()); }
   async count(n, field, val) { return (await this.fs.collection(n).where(field, '==', val).count().get()).data().count; }
   async all(n) { return (await this.fs.collection(n).get()).docs.map(d => d.data()); }
-  async putBlob(p, s) { await this.bucket.file(p).save(s, { contentType: 'text/plain', resumable: false }); }
-  async getBlob(p) { return (await this.bucket.file(p).download())[0].toString(); }
+  // Blobs (keys, ciphertexts) exceed Firestore's 1 MiB doc limit, so store them as chunk docs in `blobs`.
+  blobId(p, i) { return encodeURIComponent(p) + '~' + i; }
+  async putBlob(p, s) {
+    const CH = 700_000, n = Math.max(1, Math.ceil(s.length / CH)), col = this.fs.collection('blobs');
+    for (let i = 0; i < n; i += 5) { // small batches keep each commit well under the request size cap
+      const b = this.fs.batch();
+      for (let j = i; j < Math.min(n, i + 5); j++) b.set(col.doc(this.blobId(p, j)), { path: p, i: j, n, data: s.slice(j * CH, (j + 1) * CH) });
+      await b.commit();
+    }
+  }
+  async getBlob(p) {
+    const col = this.fs.collection('blobs'), first = await col.doc(this.blobId(p, 0)).get();
+    if (!first.exists) return undefined;
+    const { n, data } = first.data();
+    const rest = await Promise.all(Array.from({ length: n - 1 }, (_, k) => col.doc(this.blobId(p, k + 1)).get()));
+    return data + rest.map(d => d.data().data).join('');
+  }
   async recentAudit(actor, limit) { // single-field queries only: no composite index needed
     const col = this.fs.collection('audit_log');
     if (actor == null) return (await col.orderBy('log_id', 'desc').limit(limit).get()).docs.map(d => d.data());
@@ -65,12 +79,10 @@ MemoryStore.prototype.recentAudit = async function (actor, limit) {
 
 export async function storeFromEnv() {
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    const fb = { app: await import('firebase-admin/app'), firestore: await import('firebase-admin/firestore'), storage: await import('firebase-admin/storage') };
-    const bucket = process.env.FIREBASE_STORAGE_BUCKET;
-    if (!bucket) throw new Error('FIREBASE_STORAGE_BUCKET is required with FIREBASE_SERVICE_ACCOUNT');
+    const fb = { app: await import('firebase-admin/app'), firestore: await import('firebase-admin/firestore') };
     const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
     console.log('Using Firebase project', sa.project_id);
-    return new FirebaseStore({ fb, serviceAccount: sa, bucket });
+    return new FirebaseStore({ fb, serviceAccount: sa });
   }
   console.warn('WARNING: no FIREBASE_SERVICE_ACCOUNT set. Using in-memory store; data is lost on restart.');
   return new MemoryStore();
