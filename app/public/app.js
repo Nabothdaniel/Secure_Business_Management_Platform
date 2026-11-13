@@ -72,6 +72,18 @@ const skeleton = (n = 3) => `<div class="grid" aria-busy="true" aria-label="Load
 const errorState = (e, retryId) => `<div class="card empty"><div class="big" style="background:var(--bad-soft);color:var(--bad)">${icon('alert')}</div><h3>We couldn’t load this</h3><p>${esc(e.message)}</p><button class="btn" id="${retryId}">Try again</button></div>`;
 
 /* ---------- sign in / register ---------- */
+// Demo shortcuts on the login page. Set SHOW_DEMO = false to remove them before real use.
+const SHOW_DEMO = true;
+const DEMOS = [
+  { name: 'Demo Manager', email: 'manager@demo.test', password: 'demo-manager-1', role: 'manager', note: 'creates & shares datasets' },
+  { name: 'Demo Analyst', email: 'analyst@demo.test', password: 'demo-analyst-1', role: 'analyst', note: 'computes on shared data' },
+];
+async function demoLogin(d) { // sign in, creating the demo account the first time
+  try { return await api('POST', '/login', { email: d.email, password: d.password }); }
+  catch (e) { if (!/invalid credentials/.test(e.message)) throw e; }
+  await api('POST', '/register', { name: d.name, email: d.email, password: d.password, role: d.role });
+  return api('POST', '/login', { email: d.email, password: d.password });
+}
 function showAuth(mode = 'login') {
   $('#app').innerHTML = `<div class="auth"><section class="auth-hero" aria-label="About">
     <div class="row" style="gap:10px"><span class="brand-mark" style="background:#fff;color:#1f43c4">${icon('shield')}</span><b>Secure Business Platform</b></div>
@@ -93,7 +105,13 @@ function showAuth(mode = 'login') {
         <label><input type="radio" name="role" value="analyst"><div><b>Work on data shared with me</b><span>Run calculations on datasets other people give you.</span></div></label></div></fieldset>`}
       <div class="form-err" id="ferr" role="alert" hidden></div>
       <button class="btn block" id="submit" type="submit">${mode === 'login' ? 'Sign in' : 'Create account'}</button></form>
-    ${mode !== 'login' ? '<p class="hint" style="margin-top:14px">The first person to sign up becomes the admin.</p>' : ''}</div></section></div>`;
+    ${mode !== 'login' ? '<p class="hint" style="margin-top:14px">The first person to sign up becomes the admin.</p>' : ''}
+    ${SHOW_DEMO && mode === 'login' ? `<div class="demo" style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line,#ddd)"><p class="hint" style="margin:0 0 8px">Demo logins (one click)</p><div class="row" style="gap:8px;flex-wrap:wrap">${DEMOS.map((d, i) => `<button type="button" class="btn ghost sm" data-demo="${i}" title="${esc(d.note)}">${esc(d.name)}</button>`).join('')}</div></div>` : ''}</div></section></div>`;
+  $$('[data-demo]').forEach(b => b.onclick = async () => {
+    const err = $('#ferr'); err.hidden = true;
+    try { await busy(b, 'Signing in…', async () => { session = await demoLogin(DEMOS[b.dataset.demo]); }); sessionStorage.setItem('session', JSON.stringify(session)); location.hash = '#/'; route(); }
+    catch (ex) { err.textContent = ex.message; err.hidden = false; }
+  });
   $('#t-login').onclick = () => showAuth('login'); $('#t-reg').onclick = () => showAuth('register');
   $('#showpw').onclick = e => { const i = $('#pw'); i.type = i.type === 'password' ? 'text' : 'password'; e.target.textContent = i.type === 'password' ? 'Show' : 'Hide'; };
   $('#auth-form').onsubmit = async e => {
