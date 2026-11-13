@@ -1,10 +1,13 @@
 {
   "framework": null,
+  "buildCommand": "mkdir -p public/vendor && rm -rf public/vendor/seal && cp -r node_modules/node-seal/dist public/vendor/seal",
+  "outputDirectory": "public",
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api" },
-    { "source": "/healthz", "destination": "/api" }
+    { "source": "/healthz", "destination": "/api" },
+    { "source": "/vendor/seal/:path*", "destination": "/api" }
   ],
   "functions": {
-    "api/index.js": { "maxDuration": 60, "memory": 1024, "includeFiles": "public/**" }
+    "api/index.js": { "maxDuration": 60, "memory": 1024, "includeFiles": "{public/**,node_modules/node-seal/dist/**}" }
   }
 }
