@@ -1,0 +1,22 @@
+{
+  "name": "secure-business-platform",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --no-warnings server.js",
+    "test": "node --no-warnings test/e2e.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.3.0",
+    "firebase-admin": "^14.5.1",
+    "jsonwebtoken": "^9.0.3",
+    "node-seal": "^7.0.0"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  }
+}
