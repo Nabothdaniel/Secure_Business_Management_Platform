@@ -207,6 +207,13 @@ export async function createApp({ store = new MemoryStore(), secret } = {}) {
   return { app };
 }
 
+// Serverless entry (Vercel): lazily build the app once per instance and hand requests to it.
+let ready;
+export default async function handler(req, res) {
+  ready ??= storeFromEnv().then(store => createApp({ store })).then(r => r.app);
+  return (await ready)(req, res);
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const { app } = await createApp({ store: await storeFromEnv() });
   const port = process.env.PORT || 3000;
