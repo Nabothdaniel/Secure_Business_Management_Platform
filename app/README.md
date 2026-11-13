@@ -14,7 +14,7 @@ Sign in or create an account (the first account is the administrator) → **New 
 ## Mapping to Chapter 3
 | Report | Implementation |
 |---|---|
-| Fig 3.2 tiers | `public/` client tier · `server.js` application tier (JWT, RBAC, validation) · `public/he.js` cryptographic tier (shared by browser and server) · Firebase data tier (Firestore for records of users/datasets/grants/jobs/audit; public keys, relinearization keys and ciphertexts are split into chunk documents because they exceed Firestore's 1 MiB document limit; no Storage bucket is used, so the free Spark plan is enough) |
+| Fig 3.2 tiers | `public/` client tier · `server.js` application tier (JWT, RBAC, validation) · `public/he.js` cryptographic tier (shared by browser and server) · Firebase data tier (Firestore for records of users/datasets/grants/jobs/audit; public keys, relinearization keys and ciphertexts are split into chunk documents because they exceed Firestore's 1 MiB document limit) |
 | Fig 3.3 flowchart | register/login → encrypt with public key in browser → store ciphertext → authorised job → server computes → result decrypted client-side; denials are logged |
 | Fig 3.4 ERD | Firestore collections `user, dataset, encrypted_record, access_grant, computation_job, audit_log` (`store.js`) |
 | RBAC | roles admin / manager / analyst; per-dataset grants `compute < read < write` with optional expiry; owner-only grant management |

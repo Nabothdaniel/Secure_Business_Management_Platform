@@ -1,5 +1,5 @@
 // Data tier. Two interchangeable backends with the same async interface:
-//  - FirebaseStore: Firestore only (metadata, plus big blobs split into <1 MiB chunk docs; no Storage bucket / paid plan needed)
+//  - FirebaseStore: Firestore only (metadata, plus big blobs split into <1 MiB chunk docs)
 //  - MemoryStore: in-process, for tests and local dev without Firebase credentials
 const nowIso = () => new Date().toISOString();
 
